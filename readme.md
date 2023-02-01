@@ -1,3 +1,13 @@
+TODO
+- Fix file cleanup
+- Verify file paths are Docker compatible
+- Organize file system (create output, base files, log files)
+- Create entrypoint.sh (call the script at the time interval specified by environment)
+
+
+
+
+
 
 This script is designed to take TV listings from zap2it and convert them to xmltv for use with applications such as Jellyfin/Emby.
 
