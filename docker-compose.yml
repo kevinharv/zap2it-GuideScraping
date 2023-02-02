@@ -17,4 +17,4 @@ services:
       XMLTV_HEADENDID: lineupId
       XMLTV_LINEUPID: DFLT
       XMLTV_DEVICE: '-'
-      XMLTV_OUTFILE: xmlguide.xmltv
+      XMLTV_OUTFILE: /guide/output/xmlguide.xmltv
