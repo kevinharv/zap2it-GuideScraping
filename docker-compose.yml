@@ -1,0 +1,20 @@
+---
+version: '3'
+services:
+  guide:
+    build: .
+    container_name: guide-scraper
+    restart: unless-stopped
+    volumes:
+      - /path/to/out_dir:/guide/output
+    environment:
+      XMLTV_USERNAME: YOUR_USERNAME_HERE
+      XMLTV_PASSWORD: YOUR_PASSWORD_HERE
+      XMLTV_COUNTRY: USA
+      XMLTV_ZIPCODE: 00000
+      XMLTV_HISTGUIDEDAYS: 1
+      XMLTV_LANG: en
+      XMLTV_HEADENDID: lineupId
+      XMLTV_LINEUPID: DFLT
+      XMLTV_DEVICE: '-'
+      XMLTV_OUTFILE: xmlguide.xmltv

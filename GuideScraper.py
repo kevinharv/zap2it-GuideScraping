@@ -1,39 +1,31 @@
-import configparser
 import json
 import urllib.parse, urllib.request
 import time, datetime
 import xml.dom.minidom
-import sys, os, argparse
-import logging
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# Create and build logger
-logging.basicConfig(filename=os.environ.get('XMLTV_LOGFILE',
-                    "xmltv-log.log"), format='%(asctime)s %(message)s', filemode='w')
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+import os
 
 class Zap2ItGuideScrape():
 
     # Initialization function - set variables, etc.
-    def __init__(self,configLocation, outputFile):
-        self.confLocation = configLocation
-        self.outputFile = os.environ.get('XMLTV_OUTFILE', 'guide.xmltv')
-        self.config = configparser.ConfigParser()
-        self.config.read(self.confLocation)
+    def __init__(self):
+        self.username = os.environ.get('XMLTV_USERNAME', '')
+        self.password = os.environ.get('XMLTV_PASSWORD', '')
+        self.country = os.environ.get('XMLTV_COUNTRY', 'USA')
+        self.zipcode = os.environ.get('XMLTV_ZIPCODE', '00000')
+        self.histGuideDays = os.environ.get('XMLTV_HISTGUIDEDAYS', 1)
         self.lang = os.environ.get('XMLTV_LANG', 'en')
+        self.headendId = os.environ.get('XMLTV_HEADENDID', 'lineupId')
+        self.lineupid = os.environ.get('XMLTV_LINEUPID', 'DFLT')
+        self.device = os.environ.get('XMLTV_DEVICE', '-')
+        self.outputFile = os.environ.get('XMLTV_OUTFILE', 'xmlguide.xmltv')
         self.zapToken = ""
-        # print(os.environ.get('XMLTV_CONFIG_LOCATION', self.confLocation))
-        logger.info(f'Loading configuration from: {self.confLocation} \tOutput File: {self.outputFile}')
 
     # Create Authentication Request to Zap2It
     def BuildAuthRequest(self):
         url = "https://tvlistings.zap2it.com/api/user/login"
         parameters = {
-            "emailid": os.environ.get('XMLTV_USERNAME', ''),
-            "password": os.environ.get('XMLTV_PASSWORD', ''),
+            "emailid": self.username,
+            "password": self.password,
             "isfacebookuser": "false",
             "usertype": 0,
             "objectid": ""
@@ -49,18 +41,14 @@ class Zap2ItGuideScrape():
         authResponse = urllib.request.urlopen(authRequest).read()
         authFormVars = json.loads(authResponse)
         self.zapToken = authFormVars["token"]
-        self.headendid= authFormVars["properties"]["2004"]
+        self.headendid = authFormVars["properties"]["2004"]
     
     # Sets request parameters based on config file
     def BuildIDRequest(self):
         url = "https://tvlistings.zap2it.com/gapzap_webapi/api/Providers/getPostalCodeProviders/"
-        url += os.environ.get('XMLTV_COUNTRY', '') + "/"
-        url += os.environ.get('XMLTV_ZIPCODE', '') + "/gapzap/"
-        url += os.environ.get('XMLTV_LANG', 'en')
-        # if self.config.has_option("prefs","lang"):
-        #     url += os.environ.get('XMLTV_LANG', 'en')
-        # else:
-        #     url += "en-us"
+        url += self.country + "/"
+        url += self.zipcode + "/gapzap/"
+        url += self.lang
         req = urllib.request.Request(url)
         return req
     
@@ -81,35 +69,18 @@ class Zap2ItGuideScrape():
 
     # Requests guide data given the current configuration and the time being queried for
     def BuildDataRequest(self,currentTime):
-        #Defaults
-        lineupId = ''
-        headendId = ''
-        device = ''
-
-
-        # if self.config.has_option("lineup","lineupId"):
-        #     lineupId = self.config.get("lineup","lineupId")
-        # if self.config.has_option("lineup","headendId"):
-        #     headendId = self.config.get("lineup","headendId")
-        # if self.config.has_option("lineup","device"):
-        #     device = self.config.get("lineup","device")
-
-        lineupId = os.environ.get('XMLTV_LINEUPID', self.headendid)
-        headendId = os.environ.get('XMLTV_HEADENDID', 'lineupId')
-        device = os.environ.get('XMLTV_DEVICE', '-')
-
         parameters = {
             'Activity_ID': 1,
             'FromPage': "TV%20Guide",
             'AffiliateId': "gapzap",
             'token': self.zapToken,
             'aid': 'gapzap',
-            'lineupId': lineupId,
+            'lineupId': self.lineupid,
             'timespan': 3,
-            'headendId': headendId,
-            'country': os.environ.get('XMLTV_COUNTRY', ''),
-            'device': device,
-            'postalCode': os.environ.get('XMLTV_ZIPCODE', ''),
+            'headendId': self.headendId,
+            'country': self.country,
+            'device': self.device,
+            'postalCode': self.zipcode,
             'isOverride': "true",
             'time': currentTime,
             'pref': 'm,p',
@@ -122,9 +93,8 @@ class Zap2ItGuideScrape():
     
     # Fetch data for current query time
     def GetData(self,requestTime):
-        logger.info(f'Pulling Guide Information for: {time.asctime(time.gmtime(requestTime))}')
-        request = self.BuildDataRequest(requestTime)
         print(f'Pulling Guide Information for: {time.asctime(time.gmtime(requestTime))}')
+        request = self.BuildDataRequest(requestTime)
         response = urllib.request.urlopen(request).read()
         return json.loads(response)
     
@@ -141,7 +111,6 @@ class Zap2ItGuideScrape():
     
     # Build XML Guide
     def BuildEventXmL(self,event,channelId):
-        #preConfig
         season = "0"
         episode = "0"
 
@@ -181,7 +150,8 @@ class Zap2ItGuideScrape():
 
         urlEl = self.CreateElementWithData("url","https://tvlistings.zap2it.com//overview.html?programSeriesId=" + event["seriesId"] + "&amp;tmsId=" + event["program"]["id"])
         programEl.appendChild(urlEl)
-        #Build Season Data
+        
+        # Build Season Data
         try:
             if event["program"]["season"] is not None:
                 season = str(event["program"]["season"])
@@ -214,7 +184,7 @@ class Zap2ItGuideScrape():
             episodeNumEl.setAttribute("system","dd_progid")
         programEl.appendChild(episodeNumEl)
 
-        #Handle Flags
+        # Handle Flags
         for flag in event["flag"]:
             if flag == "New":
                 programEl.appendChild(self.guideXML.createElement("New"))
@@ -303,74 +273,44 @@ class Zap2ItGuideScrape():
             loopTime += (60 * 60 * 3)
         self.guideXML.appendChild(self.rootEl)
         self.WriteGuide()
-        self.CopyHistorical()
-        self.CleanHistorical()
+        # self.CopyHistorical()
+        # self.CleanHistorical()
     
     # Write the Resulting Guide to the Output File
     def WriteGuide(self):
-        logger.info('Writing Guide to File')
+        print(f'Writing Guide to File {self.outputFile}')
         with open(self.outputFile,"wb") as file:
             file.write(self.guideXML.toprettyxml().encode("utf8"))
     
     # Copy Historically Gathered Data
     def CopyHistorical(self):
-        logger.info('Copying Historical Information')
         print('Copying Historical Information')
         dateTimeObj = datetime.datetime.now()
         timestampStr = "." + dateTimeObj.strftime("%Y%m%d%H%M%S") + '.xmltv'
-        histGuideFile = timestampStr.join(optGuideFile.rsplit('.xmltv',1))
+        histGuideFile = timestampStr.join(self.outputFile.rsplit('.xmltv',1))
         with open(histGuideFile,"wb") as file:
             file.write(self.guideXML.toprettyxml().encode("utf8"))
     
+    # Remove historical data files
     def CleanHistorical(self):
-        logger.info('Removing Old Files')
         print('Removing Old Files')
         outputFilePath = os.path.abspath(self.outputFile)
         outputDir = os.path.dirname(outputFilePath)
         for item in os.listdir(outputDir):
             fileName = os.path.join(outputDir,item)
-            if os.path.isfile(fileName) & item.endswith('.xmltv') & (os.environ.get('XMLTV_OUTFILE') != "xmlguide.xmltv"):
+            if os.path.isfile(fileName) & item.endswith('.xmltv') & (self.outputFile != "xmlguide.xmltv"):
                 histGuideDays = os.environ.get('XMLTV_HISTGUIDEDAYS', 0)
-                # if os.stat(fileName).st_mtime < int(histGuideDays) * 86400:
-                if os.stat(fileName).st_mtime < int(histGuideDays) * 10:
+                if os.stat(fileName).st_mtime < int(histGuideDays) * 43200:
                     os.remove(fileName)
 
-
+# Main function execution
 if __name__ == "__main__":
-    # Define files and language
-    optConfigFile = './zap2itconfig.ini'
-    optGuideFile = 'xmlguide.xmltv'
-    optLanguage = 'en'
+    guide = Zap2ItGuideScrape()
 
-    # Define optional CLI arguments
-    parser = argparse.ArgumentParser("Parse Zap2it Guide into XMLTV")
-    parser.add_argument("-c","--configfile","-i","--ifile", help='Path to config file')
-    parser.add_argument("-o","--outputfile","--ofile", help='Path to output file')
-    parser.add_argument("-l","--language", help='Language')
-    parser.add_argument("-f","--findid", action="store_true", help='Find Headendid / lineupid')
-
-    # Parse arguments and set variables accordingly
-    args = parser.parse_args()
-    # print(args)
-    if args.configfile is not None:
-        optConfigFile = args.configfile
-    if args.outputfile is not None:
-        optGuideFile = args.outputfile
-    if args.language is not None:
-        optLanguage = args.language
-
-    # Instantiate scraper and set options
-    guide = Zap2ItGuideScrape(optConfigFile,optGuideFile)
-    if optLanguage != "en":
-        guide.lang = optLanguage
-
-    if args.findid is not None and args.findid:
-        #locate the IDs
-        guide.FindID()
-        sys.exit()
+    # Get TV providers - uncomment and run for info - comment out guide.BuildGuide()
+    # guide.FindID()
 
     # Run the scraper
     print('Starting Guide Scrape')
     guide.BuildGuide()
-    logger.info('Guide Scrape Complete')
-    print('\nGuide Scrape Complete\n\n')
+    print('\nGuide Scrape Complete\n')
